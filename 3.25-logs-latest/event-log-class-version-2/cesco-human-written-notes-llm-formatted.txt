@@ -1,4 +1,3 @@
-
 ====================================
 1. Table of Contents of the Note
 ====================================
@@ -21,7 +20,9 @@ samsung notes app "brainstorm and focusing" from this morning-
 ====================================
 
   • chat-assistant ui or beautiful guided wizard
-    • white-glove "high-end" concierge experience should be considered as a vertical too. for old ppl. there will always be a market that prefers the non-tech "human" interface with our store.
+    • white-glove "high-end" concierge experience should be considered as a 
+      vertical too. for old ppl. there will always be a market that prefers 
+      the non-tech "human" interface with our store.
 
   • Professional thobe images/gifs
 
@@ -34,38 +35,53 @@ samsung notes app "brainstorm and focusing" from this morning-
 3. Coding Learning Journey
 ====================================
 
-When I started learning coding seriously I started from free Harvard classes, reading textbooks in the backyard and taking detailed notes, and speaking to real developers and former engineers of Google/IBM/Meta.
+When I started learning coding seriously I started from free Harvard classes, 
+reading textbooks in the backyard and taking detailed notes, and speaking to 
+real developers and former engineers of Google/IBM/Meta.
 
-At the time I was doing zoom calls with my mom's cousin, Richy, who is a former IBM Executive of many years.
+At the time I was doing zoom calls with my mom's cousin, Richy, who is a 
+former IBM Executive of many years.
 
-To learn database/server/front-end development I built my first full stack app in 2022:
+To learn database/server/front-end development I built my first full stack 
+app in 2022:
 
   • A "Social Media for Book Lovers"
     • Users have a private bank of "notes" for all the books they read
-    • Users have a public discussion board to create new "topics" and "discussions" for any book in our DB (using Google books DB)
+    • Users have a public discussion board to create new "topics" and 
+      "discussions" for any book in our DB (using Google books DB)
     • Private groups for "book clubs"
     • Full messaging and reply system fully working incl a login security class
 
 What was Richy's number 1 suggestion?:
 A welcome-quiz.
 
-At the time I didn't understand why. I was focused on the inner-workings and connections of how the "user" obj integrates with the "sub-message" obj and fits neatly in the DB, etc. 4 yrs later it's clear he was speaking from very valuable wisdom.
+At the time I didn't understand why. I was focused on the inner-workings and 
+connections of how the "user" obj integrates with the "sub-message" obj and 
+fits neatly in the DB, etc. 4 yrs later it's clear he was speaking from very 
+valuable wisdom.
 
 
 ====================================
 4. Data Strategy Discussion
 ====================================
 
-There is a reason when learning full stack software engineering between 2021/22 (and honestly I did some cool coding work in HS and I'm still learning every day still) the phrase I heard repeated most was "data is the new gold."
+There is a reason when learning full stack software engineering between 
+2021/22 (and honestly I did some cool coding work in HS and I'm still 
+learning every day still) the phrase I heard repeated most was "data is the 
+new gold."
 
-(Obviously a few years passed and people forget as we focus on the advantages poised by LLM-designed tech)
+(Obviously a few years passed and people forget as we focus on the advantages 
+poised by LLM-designed tech)
 
-But our organization of our "user journey data" and insights we focus on can drive our "sales optimization" to an exciting point. Ultimately with our approach on data the focus is on
+But our organization of our "user journey data" and insights we focus on can 
+drive our "sales optimization" to an exciting point. Ultimately with our 
+approach on data the focus is on
 
 "Ethical Practices"
     meaning we collect:
         1. basic device info (ios, os v, etc.)
-        2. IP address. (requires no permissions, additional steps, is always "public" in any server call anyway)
+        2. IP address. (requires no permissions, additional steps, is always 
+           "public" in any server call anyway)
         3. Simple app-specific info like:
             1. What screen are we on?
             2. How many thobes are in cart?
@@ -78,28 +94,37 @@ But our organization of our "user journey data" and insights we focus on can dri
 
 Important:
   • The UI for Admins and Our Team
-  • Need to be able to visualize not only elegantly but in a useful easy to understand "graph"
+  • Need to be able to visualize not only elegantly but in a useful easy to 
+    understand "graph"
   • The organization of the data
   • Probably will follow this heirarchy:
     • User
     • Session
     • Milestone-Event-Journey(flow)
     • Items in Cart
-• At scale there are *countless* creative ways we can leverage this data gold mine to focus our offerings, ux (flow/journey), marketing direction, etc.
-• Finally this data can be 10x-ed in its value-as-a-means-to-sales-optimization in the way we tap into the incredible leverage AI LLM tech provides in
+• At scale there are *countless* creative ways we can leverage this data gold 
+  mine to focus our offerings, ux (flow/journey), marketing direction, etc.
+• Finally this data can be 10x-ed in its value-as-a-means-to-sales-optimization 
+  in the way we tap into the incredible leverage AI LLM tech provides in
     • Strategy
     • Marketing
     • Finance
     • Data - Analysis and
     • Essentially Endless idea generation
     • Specifically exceptional when fine-tune (ie. 2 example scenarios)...
-            we detect "blue color thobes have a significant up-tick in add-to-cart events and sales, we react and optimize the next two months' marketing strategy or release a limited edition "royal blue" collab with a legendary Japanese manufacturer.
+            we detect "blue color thobes have a significant up-tick in 
+            add-to-cart events and sales, we react and optimize the next two 
+            months' marketing strategy or release a limited edition "royal 
+            blue" collab with a legendary Japanese manufacturer.
 
             quick note: this is an advancement from the core idea...
-            we detect via our agentic-always running analysis and aggregator of global (and target region) "fashion trends" or
-            "cultural trends" knowing mass-macro-psychology and shopping-trends follows trends.
+            we detect via our agentic-always running analysis and aggregator 
+            of global (and target region) "fashion trends" or
+            "cultural trends" knowing mass-macro-psychology and 
+            shopping-trends follows trends.
 
-etc. etc. Marcus Aurelius will say the purpose of life is to "engage with other people and bring prominence" (essentially his entire thesis.)
+etc. etc. Marcus Aurelius will say the purpose of life is to "engage with 
+other people and bring prominence" (essentially his entire thesis.)
 
 
 ====================================
@@ -109,11 +134,13 @@ etc. etc. Marcus Aurelius will say the purpose of life is to "engage with other 
 This is to say. What's important?
 
   1. The development of these systems through evolving *conversation*
-  2. Iterative development on already working "levels" or "versions" to harness "compounding" beauty that in dev-ing apps/systems like this
+  2. Iterative development on already working "levels" or "versions" to 
+     harness "compounding" beauty that in dev-ing apps/systems like this
   3. Simplicity, Organization, Creativity in our solutions
   4. And finally: "greatness".
 
-I think this little post-call workshop has been valuable and focused. A closing quote comes to mind from #1 best selling "rapper", Drake Aubrey Graham:
+I think this little post-call workshop has been valuable and focused. A 
+closing quote comes to mind from #1 best selling "rapper", Drake Aubrey Graham:
 (Paraphrasing)
 
 "The mission or goal is *always* 'to make the product jump off the shelf'".
