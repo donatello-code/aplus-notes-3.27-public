@@ -1,0 +1,264 @@
+EventLog System – Final System Design (Overview v2)
+═══════════════════════════════════════════════════════════════════════════════
+
+This document describes a unified event‑logging system that serves as the
+backbone for user journey analytics, debugging, and sales optimization. Every
+meaningful user interaction—from launching the app to adding an item to the
+cart, completing a quiz, or encountering an error—is captured as a structured
+event. All events flow through a single, monolithic `EventLogger` class, which
+enforces data quality via forgivable schema validation, automatically flags
+API failures, embeds client‑side logs, and persists everything into a single
+SQL table. The result is a complete, time‑ordered stream of data that powers
+an elegant admin dashboard, AI‑driven insights, and friction‑free debugging.
+
+The system is built with three core principles:
+• **Ethical by design** – We collect only minimal, permission‑free data:
+  basic device info, IP address (hashed), and app‑specific interactions.
+  No unnecessary tracking.
+• **Simplicity through unity** – One class, one table, one consistent API.
+  Adding new event types does not require code changes; schemas are stored in
+  a database table and the system validates against them with a forgiving
+  feedback loop.
+• **Debuggability first** – Every event automatically includes the last 10
+  client‑side logs (screen transitions, network calls, errors) and a boolean
+  `error` flag that marks failed API calls, so engineers can reconstruct the
+  exact state leading up to any event.
+
+The system comprises two main components:
+1. A server‑side `EventLogger` class that receives, validates, enriches,
+   detects API errors, and stores events.
+2. A client‑side logging utility (for Android/iOS) that provides two simple
+   methods: `logEvent` for custom user actions and `logApiCall` for
+   instrumenting existing API calls.
+
+All data is stored in a single SQL table (`events`), making queries for
+dashboards, funnel analysis, and AI models straightforward and performant.
+
+───────────────────────────────────────────────────────────────────────────────
+DESIGN PHILOSOPHY
+───────────────────────────────────────────────────────────────────────────────
+
+The system rejects the notion of multiple classes for users, sessions,
+milestones, carts, etc. Instead, it treats all of these as different
+“event types” within a unified stream. This monolithic approach yields
+several advantages:
+• **Single source of truth** – All events are in one table, eliminating joins
+  and complex aggregations.
+• **Flexible schema evolution** – New event types are defined by adding a row
+  to the `event_schemas` table; the server validates incoming events against
+  these schemas, returning warnings without rejecting data.
+• **Complete user context** – Because every event carries a user object and an
+  auth token, there is never an orphaned event.
+• **Client logs are part of the event** – Debugging no longer requires
+  separate log aggregation tools; the exact client state is stored alongside
+  the server event.
+• **Built for AI** – The unified event stream is the perfect training dataset
+  for LLMs and predictive models, enabling endless sales optimization strategies.
+• **Forgivable validation** – Schema mismatches produce warnings but still
+  allow logging, ensuring data never blocks development.
+• **Automatic error detection** – The server inspects each event’s `details`
+  for API failure indicators, setting an `error` flag and optionally appending
+  `_error` to the event name.
+
+───────────────────────────────────────────────────────────────────────────────
+THE CORE CLASS: EventLogger (Server‑Side)
+───────────────────────────────────────────────────────────────────────────────
+
+The `EventLogger` is a singleton class instantiated once per server instance.
+It exposes a **single public method**: `execute(requestPayload)`. All internal
+logic (identity resolution, schema validation, enrichment, error detection,
+persistence) is encapsulated in 21 private building block methods, ensuring a
+clean API and testable components.
+
+**21 Internal Building Blocks** (grouped by responsibility):
+- **Identity & Standardization** – `getFingerprint`, `makeTempId`,
+  `formatEventKey`, `isAuth`, `cleanDeviceInfo`, `getIdentityStatus`, `stamp`.
+- **Schema Guardians** – `fetchSchema`, `validateJSON`, `getSchemaDiff`,
+  `buildWarning`, `isSchemaStrict`, `parseContext`.
+- **SQL Interface** – `rowExists`, `tableExists`, `createDevTables`,
+  `upsertUser`, `getRecentLogs`.
+- **Orchestrators** – `updateLogs` (merges guest events), `addToLogs`
+  (inserts final row), and `execute` (the entry point).
+
+**execute(requestPayload) – Step‑by‑Step Behaviour**:
+1. **Identity Resolution** – Extract device fingerprint, determine if the user
+   is authenticated, generate a temporary guest ID if needed, and resolve the
+   final user ID. If the user just authenticated, call `updateLogs` to merge
+   all previous guest events from that device.
+2. **Schema Validation (Forgivable)** – Fetch the JSON schema for the event
+   name from `event_schemas`. Validate the `details` object. If validation
+   fails and the developer has not enabled strict mode, generate a warning
+   (returned in the response) but proceed; if strict mode is on, throw a
+   `ValidationError`.
+3. **Enrichment** – Build the final event object:
+   - `event_key` = `formatEventKey(developerId, eventName, identityStatus)`
+   - `user_id` = resolved user ID
+   - `details` = the (potentially invalid) details object
+   - `device_info` = cleaned device info
+   - `server_timestamp` = current server time
+   - `client_logs` = provided buffer (last 10 logs)
+   - `error` = false (initial)
+   - `error_details` = null
+4. **API Call Failure Detection** – Inspect the `details` object for
+   configurable error indicators (e.g., `status >= 400`, presence of an
+   `error` field). If detected:
+   - Set `error = true`
+   - Optionally modify `event_name` to `{originalName}_error`
+   - Populate `error_details` with the extracted error information
+5. **Persistence** – Call `addToLogs` to insert the final row into the
+   developer‑specific `events` table.
+6. **Response** – Return a JSON object:
+{
+status: "success",
+assignedId: string, // the user ID used for the event
+identity: string, // "USER" | "GUEST" | "RECOGNIZED_DEVICE"
+warning: string | null // human‑readable schema feedback if any
+}
+
+text
+
+The class relies on a database table called `event_schemas` that stores the
+validation rules for each event type. This table is populated once during
+initial setup and updated only when new event types are introduced.
+
+───────────────────────────────────────────────────────────────────────────────
+DATABASE SCHEMA
+───────────────────────────────────────────────────────────────────────────────
+
+**Table: events** (one per developer, e.g., `dev_<id>_events`)
+| Column            | Type          | Description                                         |
+|-------------------|---------------|-----------------------------------------------------|
+| id                | BIGINT        | Auto‑increment primary key                          |
+| event_id          | UUID          | Unique identifier for the event                     |
+| user_id           | VARCHAR(255)  | User ID (real or guest)                             |
+| auth_token_hash   | VARCHAR(255)  | Hash of auth token (for debugging)                  |
+| event_name        | VARCHAR(255)  | e.g., "add_to_cart", "checkout_submit_error"        |
+| details           | JSONB         | Polymorphic event details                           |
+| client_logs       | JSONB         | Last 10 client logs (appended by client)            |
+| hashed_ip         | VARCHAR(64)   | SHA‑256 of client IP                                |
+| device_info       | JSONB         | Normalised device data                              |
+| server_timestamp  | TIMESTAMPTZ   | When the event was received                         |
+| client_timestamp  | TIMESTAMPTZ   | Client‑provided timestamp                           |
+| error             | BOOLEAN       | True if this event represents an API failure        |
+| error_details     | JSONB         | Structured error context (status, message, etc.)   |
+
+**Indexes**:
+- `idx_user_id` on `user_id`
+- `idx_event_name` on `event_name`
+- `idx_server_timestamp` on `server_timestamp`
+- `idx_user_event_time` composite on `(user_id, event_name, server_timestamp)`
+- Generated column `session_id` extracted from `details` (optional)
+
+**Table: event_schemas** (shared or per‑tenant)
+| Column        | Type          | Description                                         |
+|---------------|---------------|-----------------------------------------------------|
+| event_name    | VARCHAR(255)  | Primary key                                         |
+| schema_json   | JSONB         | JSON Schema for the `details` object                |
+| options_json  | JSONB         | Metadata: milestone flag, funnel flag, strict_mode, error detection rules |
+
+───────────────────────────────────────────────────────────────────────────────
+CLIENT‑SIDE UTILITY (Android / iOS)
+───────────────────────────────────────────────────────────────────────────────
+
+The client‑side class is intentionally minimal, exposing only two public
+methods. It automatically maintains a circular buffer of the last 10 client
+logs (screen views, network calls, errors) and attaches them to every server
+payload.
+
+**Initialization** (once per app):
+- Provide device info (uniqueId, OS, model, etc.)
+- Provide a callback to obtain the current auth token/user object
+- Install network interceptors and screen listeners to populate the log buffer
+
+**Public Methods**:
+
+1. **logEvent(name, details)**
+- Logs a custom user action (e.g., "add_to_cart", "screen_view").
+- Automatically attaches: device info, auth token, client logs, timestamp.
+- Sends the event to the server via `execute` (no error detection).
+
+2. **logApiCall(apiName, response)**
+- Designed to be placed immediately after any existing API call.
+- Accepts the raw response object (including status, data, error).
+- Automatically detects failure by inspecting:
+     * HTTP status >= 400
+     * Presence of an `error` field in the response data
+     * If the response is an exception
+- On failure, it sets the `error` flag and appends `_error` to the event name
+  (e.g., `checkout_submit_error`) and includes `error_details`.
+- On success, it logs as a normal event.
+- Attaches the same context (device, auth, client logs) as `logEvent`.
+
+Both methods are asynchronous and non‑blocking; they use a queue and retry
+mechanism for transient network failures.
+
+**Integration Example** (pseudocode):
+```javascript
+// Existing API call
+const response = await api.checkout(orderData);
+// One line to instrument
+EventLogger.logApiCall('checkout_submit', response);
+if (response.ok) { ... } else { ... }
+
+// Custom event without API call
+EventLogger.logEvent('add_to_cart', { productId, quantity });
+This approach requires no refactoring of existing code—developers simply
+add one line after each API call and one line for each user‑initiated action.
+
+───────────────────────────────────────────────────────────────────────────────
+10 ADDITIONAL IDEAS FOR SALES OPTIMIZATION & SYSTEM EXTENSION
+───────────────────────────────────────────────────────────────────────────────
+
+Intelligent Error Grouping – Use the error flag and error_details
+to automatically cluster similar API failures (e.g., payment gateway
+timeouts) and alert the engineering team with a suggested fix, based on
+patterns in the client logs.
+
+Forgivable Schema Analytics – Track warnings returned by execute to
+build a dashboard showing which event types frequently have schema
+mismatches. Prioritize documentation updates or client‑side improvements
+based on real‑world developer friction.
+
+Automatic Funnel Detection from Error Events – When an _error event
+occurs (e.g., checkout_submit_error), the system can automatically
+backtrack through the user’s previous events and client logs to suggest
+the most common sequence leading to the failure, helping prioritize fixes.
+
+Session Replay with Error Highlighting – In the admin dashboard,
+reconstruct user sessions by interleaving events and client logs. Highlight
+events where error = true in red, and allow engineers to jump directly to
+the client logs that preceded the error.
+
+Predictive Success Scoring – Train a model on sequences of events
+(including error events) to predict the likelihood of a user converting.
+When a user is about to hit a known error‑prone step, the system can
+preemptively show help content or a fallback UI.
+
+Dynamic A/B Test Assignment Based on Errors – If a particular A/B
+variant shows a significantly higher error rate for a critical event
+(e.g., checkout), automatically pause that variant and alert the team,
+preventing revenue loss.
+
+Geographic Error Heatmaps – Combine the hashed_ip with the error
+flag to visualise where API failures are most common. This can uncover
+regional CDN or connectivity issues that affect user experience.
+
+LLM‑Driven Support Summaries with Error Context – When a support ticket
+is created, fetch the user’s last 20 events, include the error flag and
+error_details, and generate a natural‑language summary that explicitly
+mentions failures (“User attempted checkout three times, each failing with
+payment gateway timeout”). This cuts resolution time dramatically.
+
+Error‑Aware Cohort Analysis – Segment users not only by conversion but
+also by whether they encountered errors. Compare LTV (lifetime value) of
+users who experienced failures versus those who did not, to quantify the
+business impact of reliability issues.
+
+Automated Schema Evolution Recommendations – As developers add custom
+fields to details over time (without updating the schema), the system
+can analyse the accumulated fields and propose adding them to the official
+schema, reducing technical debt and ensuring consistent data quality.
+
+───────────────────────────────────────────────────────────────────────────────
+END OF DOCUMENT
+───────────────────────────────────────────────────────────────────────────────
