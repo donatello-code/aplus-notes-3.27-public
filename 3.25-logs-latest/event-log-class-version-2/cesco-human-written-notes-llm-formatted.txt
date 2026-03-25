@@ -3,7 +3,7 @@
 1. Table of Contents of the Note
 ====================================
 1. Original Notes Header
-2. March 27 Post-Meeting Notes
+2. March 25 Post-Meeting Notes
 3. Coding Learning Journey
 4. Data Strategy Discussion  
 5. Closing Thoughts
@@ -17,7 +17,7 @@ samsung notes app "brainstorm and focusing" from this morning-
 
 
 ====================================
-2. March 27 Post-Meeting Notes
+2. March 25 Post-Meeting Notes
 ====================================
 
   • chat-assistant ui or beautiful guided wizard
