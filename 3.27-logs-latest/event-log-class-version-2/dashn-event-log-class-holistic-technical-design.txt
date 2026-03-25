@@ -1,0 +1,176 @@
+EventLog System – Comprehensive Documentation
+================================================================================
+
+This document provides a complete overview of the EventLog system, covering the
+server-side building blocks, the core EventLogger class, database schema, and
+the minimal frontend integration required.
+
+--------------------------------------------------------------------------------
+1. SERVER-SIDE BUILDING BLOCKS (21 METHODS)
+--------------------------------------------------------------------------------
+
+The EventLog class is composed of 21 focused methods, grouped by responsibility.
+They are never called directly by external code; instead they are orchestrated
+by the single public method `execute()`.
+
+Group A – Identity & Standardization
+────────────────────────────────────
+1. getFingerprint(deviceInfo)          – Extracts stable hardware ID.
+2. makeTempId(fingerprint)             – Generates deterministic guest ID.
+3. formatEventKey(devId, name, status) – Builds indexed composite key.
+4. isAuth(authObject)                  – Checks if auth contains a user ID.
+5. cleanDeviceInfo(deviceInfo)         – Sanitises device data to flat object.
+6. getIdentityStatus(auth, fingerprint)– Returns "USER"/"GUEST"/"RECOGNIZED_DEVICE".
+7. stamp()                             – Returns server ISO timestamp.
+
+Group B – Schema Guardians (Forgivable Validation)
+──────────────────────────────────────────────────
+8. fetchSchema(eventName)              – Retrieves JSON schema from DB.
+9. validateJSON(details, schema)       – Returns true/false against schema.
+10. getSchemaDiff(details, schema)     – Lists missing keys/type errors.
+11. buildWarning(diff)                 – Formats diff into user‑friendly message.
+12. isSchemaStrict(developerSettings)  – Checks if strict mode is enabled.
+13. parseContext(context)              – Ensures details is valid JSON (default {}).
+
+Group C – SQL Interface & Data Operations
+─────────────────────────────────────────
+14. rowExists(table, condition)        – Checks existence efficiently.
+15. tableExists(tableName)             – Verifies if a table exists.
+16. createDevTables(developerId)       – Provisions tables for new developer.
+17. upsertUser(userData)               – Inserts or updates master user record.
+18. getRecentLogs(fingerprint, userId) – Retrieves last N events for resolution.
+
+Group D – Major Orchestrators
+─────────────────────────────
+19. updateLogs(fingerprint, realUserId)– Reassigns all guest events to real user.
+20. addToLogs(eventPayload)            – Assembles final row and inserts.
+21. execute(requestPayload)            – Single entry point (see below).
+
+--------------------------------------------------------------------------------
+2. CORE CLASS: EventLogger
+--------------------------------------------------------------------------------
+
+The EventLogger is a monolithic class instantiated once per server instance.
+It exposes only one public method to external callers:
+
+   execute(requestPayload)
+
+All other methods are internal helpers. The execute method performs the
+following steps in order:
+
+  A. Identity Resolution – Determines user ID (guest or real) using the building
+     blocks. If the request includes an authenticated user, it calls
+     `updateLogs` to merge any previous guest events from the same device.
+
+  B. Schema Validation (Forgivable) – Fetches the JSON schema for the event name,
+     validates the `details` object. If validation fails and strict mode is off,
+     the event is still stored and a warning is returned. If strict mode is on,
+     the event is rejected with a ValidationError.
+
+  C. Enrichment & Error Detection – The event is enriched with server timestamp,
+     formatted event key, sanitised device info, and the client logs. The system
+     then inspects the `details` for indicators of an API failure (e.g., status
+     code >=400, presence of an `error` field). If a failure is detected, it
+     sets `error = true`, optionally appends `_error` to the event name, and
+     populates `error_details`.
+
+  D. Persistence – The final event object is passed to `addToLogs`, which
+     performs a single-row insert into the developer‑specific events table.
+
+  E. Response – Returns a JSON object with:
+       { status: "success", assignedId: string, identity: string, warning: string|null }
+
+--------------------------------------------------------------------------------
+3. DATABASE SCHEMA
+--------------------------------------------------------------------------------
+
+Two tables are used:
+
+Table: events (one per developer, named e.g., dev_<id>_events)
+────────────────────────────────────────────────────────────────
+| Column            | Type          | Description                                         |
+|-------------------|---------------|-----------------------------------------------------|
+| id                | BIGINT        | Auto‑increment primary key                           |
+| event_id          | UUID          | Unique identifier for the event                      |
+| user_id           | VARCHAR(255)  | User ID (real or guest)                              |
+| auth_token_hash   | VARCHAR(255)  | Hash of auth token (for debugging)                   |
+| event_name        | VARCHAR(255)  | e.g. "add_to_cart", "checkout_submit_error"          |
+| details           | JSONB         | Polymorphic event‑specific data                      |
+| client_logs       | JSONB         | Last 10 client logs (circular buffer)                |
+| hashed_ip         | VARCHAR(64)   | SHA‑256 of client IP                                 |
+| device_info       | JSONB         | Normalised device data                               |
+| server_timestamp  | TIMESTAMPTZ   | Server time when event was received                  |
+| client_timestamp  | TIMESTAMPTZ   | Client‑provided timestamp                            |
+| error             | BOOLEAN       | True if the event represents an API failure          |
+| error_details     | JSONB         | Structured error context (status, message, etc.)    |
+
+Indexes: user_id, event_name, server_timestamp, (user_id, event_name, server_timestamp)
+
+Table: event_schemas (shared across all developers, or per‑tenant)
+────────────────────────────────────────────────────────────────────
+| Column        | Type          | Description                                         |
+|---------------|---------------|-----------------------------------------------------|
+| event_name    | VARCHAR(255)  | Primary key                                         |
+| schema_json   | JSONB         | JSON Schema for the `details` object                |
+| options_json  | JSONB         | Metadata: milestone flag, funnel flag, strict mode, etc. |
+
+How They Work Together:
+- When `execute` receives an event, it queries `event_schemas` (with caching) to
+  obtain the expected schema for that event name.
+- The `details` object is validated against `schema_json`.
+- If validation fails and the developer has not enabled strict mode, the event
+  is still inserted into `events` with a warning returned to the caller.
+- The `error` and `error_details` columns in `events` are used to flag API
+  failures detected from the `details` object (independent of schema validation).
+
+--------------------------------------------------------------------------------
+4. FRONTEND IMPLEMENTATION (iOS & Android)
+--------------------------------------------------------------------------------
+
+The client side exposes only two main methods, designed to be appended directly
+after existing API calls or user actions. Both methods automatically attach
+device fingerprint, auth token, and the last 10 client logs.
+
+Initialisation (once per app launch):
+────────────────────────────────────
+- Instantiate the `EventLogger` with device info and a callback to obtain the
+  current auth token/user.
+- Set up automatic logging of screen transitions, network requests, and errors
+  to maintain the 10‑log buffer.
+
+Public Methods:
+────────────────────────────────────
+1. logEvent(name, details)
+   – Logs a custom user action (e.g., "add_to_cart", "screen_view").
+   – Does not inspect the details for API errors; `error` column remains false.
+
+2. logApiCall(apiName, response)
+   – Intended to be called immediately after an existing API call (e.g., fetch,
+     Alamofire, Retrofit) completes.
+   – Accepts the response object (including status, data, error).
+   – Automatically detects failure by checking:
+       * HTTP status >= 400
+       * Presence of an `error` field in the response data
+       * If the response is an exception object
+   – On failure, it sets `error = true`, appends `_error` to the event name,
+     and includes `error_details` derived from the response.
+   – On success, it logs as a normal event.
+
+Integration Example (JavaScript / React Native – analogous for Swift/Kotlin):
+───────────────────────────────────────────────────────────────────────────────
+// Existing API call
+const response = await api.checkout(orderData);
+// Add one line after the call
+EventLogger.logApiCall('checkout_submit', response);
+if (response.ok) { ... } else { ... }
+
+// For custom events (no API call)
+EventLogger.logEvent('add_to_cart', { productId, quantity });
+
+This approach requires minimal changes to existing code – just one line after
+each API call – and works identically on both iOS and Android by using a shared
+native module or a cross‑platform library.
+
+--------------------------------------------------------------------------------
+END OF DOCUMENT
+--------------------------------------------------------------------------------

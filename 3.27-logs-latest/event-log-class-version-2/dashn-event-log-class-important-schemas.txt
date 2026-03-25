@@ -1,0 +1,332 @@
+Core JSON Schemas – Templates for Extensible Event Data
+================================================================================
+
+The following schemas define the baseline structure for key objects used in the
+EventLog system. Each schema is designed to be extended – developers may add
+additional fields as needed for their specific application. The schemas are
+intended to be stored in the `event_schemas` table for the corresponding event
+names, or used as validation templates for internal objects.
+
+All schemas use JSON Schema draft‑07 syntax for consistency.
+
+--------------------------------------------------------------------------------
+1. DeviceInfo
+--------------------------------------------------------------------------------
+Captures the device’s hardware and OS characteristics.
+
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "uniqueId": { "type": "string", "description": "Stable device identifier (e.g., IDFV, Android ID)" },
+    "os": { "type": "string", "enum": ["iOS", "Android", "Web", "Unknown"] },
+    "osVersion": { "type": "string", "description": "OS version number" },
+    "model": { "type": "string", "description": "Device model (e.g., iPhone 15, Pixel 8)" },
+    "manufacturer": { "type": "string", "description": "Device manufacturer" },
+    "screenWidth": { "type": "integer", "minimum": 0 },
+    "screenHeight": { "type": "integer", "minimum": 0 },
+    "appVersion": { "type": "string", "description": "App version string" },
+    "language": { "type": "string", "description": "Device language code" }
+  },
+  "required": ["uniqueId", "os", "appVersion"],
+  "additionalProperties": true   // Extensible
+}
+
+--------------------------------------------------------------------------------
+2. Fingerprint
+--------------------------------------------------------------------------------
+The resolved stable identifier derived from DeviceInfo. Usually a string, but
+can be an object if multiple components are needed.
+
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "fingerprint": { "type": "string", "description": "Primary fingerprint (e.g., hashed uniqueId)" },
+    "components": {
+      "type": "object",
+      "properties": {
+        "uniqueId": { "type": "string" },
+        "advertisingId": { "type": "string" },
+        "vendorId": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "required": ["fingerprint"],
+  "additionalProperties": true
+}
+
+--------------------------------------------------------------------------------
+3. AuthObject
+--------------------------------------------------------------------------------
+Authentication data provided by the client (often in a token or session).
+
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "userId": { "type": "string", "description": "Authenticated user ID" },
+    "token": { "type": "string", "description": "JWT or session token" },
+    "sessionId": { "type": "string", "description": "Server‑side session identifier" },
+    "expiresAt": { "type": "string", "format": "date-time", "description": "Token expiry" }
+  },
+  "oneOf": [
+    { "required": ["userId"] },
+    { "required": ["token"] }
+  ],
+  "additionalProperties": true
+}
+
+--------------------------------------------------------------------------------
+4. UserObject
+--------------------------------------------------------------------------------
+User profile data that may be attached to events (with consent).
+
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "description": "Unique user identifier" },
+    "anonymousId": { "type": "string", "description": "Temporary ID for guests" },
+    "name": { "type": "string", "description": "Display name (optional)" },
+    "email": { "type": "string", "format": "email", "description": "Only if consented" },
+    "phone": { "type": "string", "description": "Only if consented" },
+    "customAttributes": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Developer‑defined user metadata"
+    }
+  },
+  "oneOf": [
+    { "required": ["id"] },
+    { "required": ["anonymousId"] }
+  ],
+  "additionalProperties": true
+}
+
+--------------------------------------------------------------------------------
+5. ClientLogEntry
+--------------------------------------------------------------------------------
+A single entry in the circular buffer of client logs.
+
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "timestamp": { "type": "string", "format": "date-time", "description": "Client ISO timestamp" },
+    "type": { "type": "string", "enum": ["screen_view", "network_request", "network_response", "error", "user_action", "system"] },
+    "message": { "type": "string", "description": "Short description" },
+    "data": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional contextual data (e.g., URL, status code)"
+    }
+  },
+  "required": ["timestamp", "type", "message"],
+  "additionalProperties": false
+}
+
+--------------------------------------------------------------------------------
+6. ErrorDetails
+--------------------------------------------------------------------------------
+Structured error information for the `error_details` column.
+
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "code": { "type": ["integer", "string"], "description": "HTTP status code or error code" },
+    "message": { "type": "string", "description": "Error message" },
+    "stack": { "type": "string", "description": "Stack trace (optional)" },
+    "domain": { "type": "string", "description": "Error domain (e.g., network, validation)" },
+    "details": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Any additional error context"
+    }
+  },
+  "required": ["code", "message"],
+  "additionalProperties": true
+}
+
+--------------------------------------------------------------------------------
+7. AppOpenEventDetails
+--------------------------------------------------------------------------------
+Details for the `app_open` event (core event).
+
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "version": { "type": "string", "description": "App version" },
+    "build": { "type": "string", "description": "Build number" },
+    "launchCount": { "type": "integer", "minimum": 1, "description": "Number of times app launched (client‑side)" },
+    "previousVersion": { "type": "string", "description": "Previous version if updated" },
+    "isFirstLaunch": { "type": "boolean", "description": "True if first time ever" },
+    "source": { "type": "string", "description": "How app was opened (push, url, etc.)" }
+  },
+  "required": ["version", "launchCount"],
+  "additionalProperties": true
+}
+
+--------------------------------------------------------------------------------
+8. AuthSignupEventDetails
+--------------------------------------------------------------------------------
+Details for the `auth_signup` event (core event).
+
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "email": { "type": "string", "format": "email", "description": "User email" },
+    "name": { "type": "string", "description": "User name" },
+    "method": { "type": "string", "enum": ["email", "google", "apple", "phone"], "description": "Signup method" },
+    "referralCode": { "type": "string", "description": "Optional referral code" }
+  },
+  "required": ["method"],
+  "additionalProperties": true
+}
+
+--------------------------------------------------------------------------------
+9. AuthLoginEventDetails
+--------------------------------------------------------------------------------
+Details for the `auth_login` event (core event).
+
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "method": { "type": "string", "enum": ["email", "google", "apple", "phone", "token"], "description": "Login method" },
+    "isFirstLogin": { "type": "boolean", "description": "True if user never logged in before" },
+    "previousLoginTimestamp": { "type": "string", "format": "date-time", "description": "Last login time if known" }
+  },
+  "required": ["method"],
+  "additionalProperties": true
+}
+
+--------------------------------------------------------------------------------
+10. AddToCartEventDetails
+--------------------------------------------------------------------------------
+Details for the `add_to_cart` event (core event).
+
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "productId": { "type": "string", "description": "Product identifier" },
+    "sku": { "type": "string", "description": "Stock keeping unit" },
+    "quantity": { "type": "integer", "minimum": 1, "default": 1 },
+    "price": { "type": "number", "minimum": 0, "description": "Unit price at time of add" },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$", "default": "USD" },
+    "size": { "type": "string" },
+    "color": { "type": "string" },
+    "customizations": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Product‑specific customizations"
+    }
+  },
+  "required": ["productId", "quantity"],
+  "additionalProperties": true
+}
+
+--------------------------------------------------------------------------------
+11. CheckoutSubmitEventDetails
+--------------------------------------------------------------------------------
+Details for the `checkout_submit` event (core event).
+
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "orderId": { "type": "string", "description": "Order identifier (if generated before submit)" },
+    "orderItems": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/orderItem" },
+      "minItems": 1
+    },
+    "shippingAddress": {
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "street": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "postalCode": { "type": "string" },
+        "country": { "type": "string" }
+      },
+      "required": ["fullName", "street", "city", "country"]
+    },
+    "paymentMethod": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["credit_card", "paypal", "apple_pay", "google_pay"] },
+        "last4": { "type": "string", "pattern": "^[0-9]{4}$" }
+      },
+      "required": ["type"]
+    },
+    "totalAmount": { "type": "number", "minimum": 0 },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$", "default": "USD" },
+    "discountCode": { "type": "string" },
+    "error": { "$ref": "#/definitions/errorObject" }   // When the checkout API fails
+  },
+  "definitions": {
+    "orderItem": {
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "quantity": { "type": "integer", "minimum": 1 },
+        "price": { "type": "number", "minimum": 0 }
+      },
+      "required": ["productId", "quantity", "price"]
+    },
+    "errorObject": {
+      "type": "object",
+      "properties": {
+        "code": { "type": ["integer", "string"] },
+        "message": { "type": "string" }
+      }
+    }
+  },
+  "required": ["orderItems", "shippingAddress", "paymentMethod", "totalAmount"],
+  "additionalProperties": true
+}
+
+--------------------------------------------------------------------------------
+12. ApiErrorDetectionConfiguration
+--------------------------------------------------------------------------------
+While not a JSON schema for an event, this is a configuration object that
+defines how the server should detect API errors from the `details` field.
+It can be stored per developer in the `options_json` column of `event_schemas`
+or in a separate configuration table.
+
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "errorIndicators": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "JSONPath to a field in details (e.g., '$.error')" },
+          "values": { "type": "array", "description": "If field equals any of these values, treat as error", "items": true },
+          "condition": { "type": "string", "enum": ["exists", "truthy", ">=400"] }
+        },
+        "required": ["path"]
+      },
+      "description": "List of rules to detect an error"
+    },
+    "errorNameSuffix": { "type": "string", "default": "_error", "description": "Suffix to append to event_name on error" },
+    "includeResponseBodyInDetails": { "type": "boolean", "default": true }
+  },
+  "additionalProperties": true
+}
+
+Example rule for HTTP responses: { "path": "$.status", "condition": ">=400" }
+
+================================================================================
+These schemas serve as baseline templates. Developers may extend them by adding
+new properties (since `additionalProperties` is set to `true` in most cases) or
+by creating entirely new event schemas that reference these common definitions.
